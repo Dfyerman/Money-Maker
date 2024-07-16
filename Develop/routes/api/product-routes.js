@@ -43,36 +43,48 @@ router.get('/:id', async (req, res) => {
 
 // create new product
 router.post('/', (req, res) => {
-  /* req.body should look like this...
-    {
-      product_name: "Basketball",
-      price: 200.00,
-      stock: 3,
-      tagIds: [1, 2, 3, 4]
-    }
-  */
-  Product.create(req.body)
+  // Extract the required fields from the request body
+  const { product_name, price, stock, category_id, tagIds } = req.body;
+
+  // Check if all required fields are present in the request body
+  if (!product_name || !price || !category_id) {
+    return res.status(400).json({ error: 'Please provide product_name, price, and category_id' });
+  }
+
+  // Create a new Product instance
+  Product.create({
+    product_name,
+    price,
+    stock: stock || 10, // Set default value for stock if not provided
+    category_id,
+  })
     .then((product) => {
-      // if there's product tags, we need to create pairings to bulk create in the ProductTag model
-      if (req.body.tagIds.length) {
-        const productTagIdArr = req.body.tagIds.map((tag_id) => {
+      // Check if there are tagIds provided
+      if (tagIds && tagIds.length) {
+        // Create productTag entries for each tagId
+        const productTagIdArr = tagIds.map((tag_id) => {
           return {
             product_id: product.id,
             tag_id,
           };
         });
+
+        // Bulk create productTag entries
         return ProductTag.bulkCreate(productTagIdArr);
       }
-      // if no product tags, just respond
+
+      // Respond with the created product if no tags provided
       res.status(200).json(product);
     })
-    .then((productTagIds) => res.status(200).json(productTagIds))
+    .then((productTagIds) => {
+      // Respond with the productTagIds if tags were created
+      res.status(200).json(productTagIds);
+    })
     .catch((err) => {
-      console.log(err);
-      res.status(400).json(err);
+      console.error(err);
+      res.status(400).json({ error: 'Failed to create product' });
     });
 });
-
 // update product
 router.put('/:id', (req, res) => {
   // update product data
@@ -118,8 +130,9 @@ router.put('/:id', (req, res) => {
     });
 });
 
-router.delete('/:id', (req, res) => {
-  // delete one product by its `id` value
+router.delete('/:id', async (req, res) => {
+  const productId = req.params.id;
+  await Product.destroy({ where: { id: productId } });
+  res.json({ message: 'Product deleted successfully' });
 });
-
 module.exports = router;
